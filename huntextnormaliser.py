@@ -230,7 +230,7 @@ class HungarianTextNormalizer:
         # Matematikai szimbólumok átírása
         for symbol, word in self.math_symbols.items():
             # Biztosítjuk, hogy ne cserélje le a szimbólumokat szavakon belül
-            text = re.sub(rf'(?<=\s|^){re.escape(symbol)}(?=\s|$)', f" {word} ", text)
+            text = re.sub(rf'(?<!\S){re.escape(symbol)}(?=\s|$)', f" {word} ", text)
         return text
 
     def spoken_symbol(self, text):
@@ -277,7 +277,9 @@ if __name__ == "__main__":
     normalizer = HungarianTextNormalizer()
     sample_text = """
     Az időpont 13h:15m:45s volt.
+
     A hőmérséklet ma +25°C lesz, holnap pedig -5°C.
+    
     A tömeg 70kg, ami 0.07t-nak felel meg.
     A távolság 5km, amelyet 30min alatt tettünk meg.
     A terület 10ha, amely 100000m²-nek felel meg.
@@ -285,6 +287,7 @@ if __name__ == "__main__":
     Az adatátvitel sebessége 100Mbps.
     A fájl mérete 2GB.
     A feszültség 230V, az áramerősség 10A.
+    Az ABC rövidítés jelentése: American Broadcasting Company.
     """
     normalized_text = normalizer.normalize(sample_text)
     print(normalized_text)
