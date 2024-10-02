@@ -51,7 +51,7 @@ class HungarianTextNormalizer:
             "'": 'aposztróf'
         }
         self.units = {
-            '°C': 'fok Celsius',
+            '°C': 'Celsius fok',
             '°F': 'fok Fahrenheit',
             'K': 'kelvin',
             't': 'tonna',
