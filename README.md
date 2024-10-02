@@ -1,4 +1,4 @@
-Egyelőre fejlesztés alatt, lehet lesz belőle valami idővel, de lehet hogy nem :) (még határozottan nincs kész!! Ha van ötleted írd meg.)
+Egyelőre fejlesztés alatt, lehet lesz belőle valami idővel, de lehet hogy nem :) (Még határozottan nincs kész!! Ha van ötleted írd meg.)
 
 Letöltés:
 ```
