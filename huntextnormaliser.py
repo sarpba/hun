@@ -1,5 +1,4 @@
 import re
-from datetime import datetime
 
 class HungarianTextNormalizer:
     def __init__(self):
@@ -51,7 +50,7 @@ class HungarianTextNormalizer:
             "'": 'aposztróf'
         }
         self.units = {
-            '°C': 'Celsius fok',
+            '°C': 'fok Celsius',
             '°F': 'fok Fahrenheit',
             'K': 'kelvin',
             't': 'tonna',
@@ -145,7 +144,7 @@ class HungarianTextNormalizer:
         # Pénznemek átírása
         pattern = re.compile(r'(\d+[\d\s,.]*)\s*([€$£¥₽]|HUF|Ft)')
         def replace_currency(match):
-            amount = match.group(1)
+            amount = match.group(1).strip().replace(' ', '').replace(',', '.')
             currency = self.currency_symbols.get(match.group(2), match.group(2))
             return f"{amount} {currency}"
         return pattern.sub(replace_currency, text)
@@ -160,7 +159,7 @@ class HungarianTextNormalizer:
         return pattern.sub(replace_date, text)
 
     def timestamp(self, text):
-        # Időbélyegek átírása
+        # Időbélyegek átírása (h:m:s formátum)
         pattern = re.compile(r'(\d{1,2})h:(\d{1,2})m:(\d{1,2})s')
         def replace_timestamp(match):
             hours, minutes, seconds = match.groups()
@@ -168,13 +167,13 @@ class HungarianTextNormalizer:
         return pattern.sub(replace_timestamp, text)
 
     def time_of_day(self, text):
-        # Napi időpontok átírása
-        pattern = re.compile(r'(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?h?')
+        # Napi időpontok átírása (h:m vagy h:m:s formátum)
+        pattern = re.compile(r'(\d{1,2})h:(\d{1,2})m(?::(\d{1,2})s)?')
         def replace_time(match):
             hours, minutes, seconds = match.groups()
-            result = f"{int(hours)} óra {int(minutes)} perc"
+            result = f"{self.number_to_hungarian(int(hours))} óra {self.number_to_hungarian(int(minutes))} perc"
             if seconds:
-                result += f" {int(seconds)} másodperc"
+                result += f" {self.number_to_hungarian(int(seconds))} másodperc"
             return result
         return pattern.sub(replace_time, text)
 
@@ -191,8 +190,8 @@ class HungarianTextNormalizer:
         return text
 
     def ordinal(self, text):
-        # Sorszámok átírása
-        pattern = re.compile(r'\b(\d+)\.')
+        # Sorszámok átírása (csak nem-tizedes)
+        pattern = re.compile(r'\b(\d+)\.(?!\d)')
         def replace_ordinal(match):
             number = int(match.group(1))
             ordinal = self.number_to_ordinal(number)
@@ -228,7 +227,12 @@ class HungarianTextNormalizer:
 
     def math_symbol(self, text):
         # Matematikai szimbólumok átírása
+        # Különösen kezeljük a +- és -- eseteket
+        text = text.replace('+-', ' plusz mínusz ').replace('--', ' mínusz mínusz ')
+        # Majd a többi matematikai szimbólumot
         for symbol, word in self.math_symbols.items():
+            if symbol in ['+', '-']:  # Már kezeltük a +- és -- eseteket
+                continue
             # Biztosítjuk, hogy ne cserélje le a szimbólumokat szavakon belül
             text = re.sub(rf'(?<!\S){re.escape(symbol)}(?=\s|$)', f" {word} ", text)
         return text
@@ -241,13 +245,81 @@ class HungarianTextNormalizer:
 
     def units_of_measurement(self, text):
         # Mértékegységek átírása
+        # Kivétel kezelése, hogy a 'perc' ne legyen átírva
+        # Először megakadályozzuk, hogy a 'm' perc esetében 'méter' legyen
         pattern = re.compile(r'(\b\d+[\d\s,\.]*)\s*([°˚]?[A-Za-zμ²³]+)\b')
         def replace_units(match):
-            amount = match.group(1)
+            amount = match.group(1).strip().replace(' ', '').replace(',', '.')
             unit = match.group(2)
+            # Speciális kezelés a 'm' és 'min' esetében
+            if unit == 'm' and re.search(r'\d+h:\d+m', text):
+                # Ha időpont része, ne cserélje le
+                return match.group(0)
             unit_full = self.units.get(unit, unit)
             return f"{amount} {unit_full}"
         return pattern.sub(replace_units, text)
+
+    def number_to_words(self, text):
+        # Számok átírása szöveggé (pl. 13 -> tizenhárom)
+        # Tizedes számok kezelése
+        pattern = re.compile(r'\b(\d+)(?:\.(\d+))?\b')
+        def replace_number(match):
+            integer = int(match.group(1))
+            decimal = match.group(2)
+            words = self.number_to_hungarian(integer)
+            if decimal:
+                decimal_length = len(decimal)
+                decimal_word = self.number_to_hungarian(int(decimal))
+                if decimal_length == 1:
+                    decimal_unit = 'tized'
+                elif decimal_length == 2:
+                    decimal_unit = 'század'
+                elif decimal_length == 3:
+                    decimal_unit = 'ezred'
+                elif decimal_length == 4:
+                    decimal_unit = 'százezred'
+                else:
+                    decimal_unit = f"{self.number_to_hungarian(int(decimal))} tized"
+                words += f" egész {decimal_word} {decimal_unit}"
+            return words
+        return pattern.sub(replace_number, text)
+
+    def number_to_hungarian(self, number):
+        # Egyszerű számok szöveggé alakítása magyarul
+        # Korlátozott tartomány, bővíthető
+        units = ["nulla", "egy", "kettő", "három", "négy", "öt", "hat", "hét", "nyolc", "kilenc"]
+        teens = ["tíz", "tizenegy", "tizenkettő", "tizenhárom", "tizennégy", "tizenöt", "tizenhat", "tizenhét", "tizennyolc", "tizenkilenc"]
+        tens = ["", "", "húsz", "harminc", "negyven", "ötven", "hatvan", "hetven", "nyolcvan", "kilencven"]
+        hundreds = ["", "száz", "kettőszáz", "háromszáz", "négyszáz", "ötszáz", "hatszáz", "hétszáz", "nyolcszáz", "kilencszáz"]
+        thousands = ["", "ezer", "kettő ezer", "három ezer", "négy ezer", "öt ezer", "hat ezer", "hét ezer", "nyolc ezer", "kilenc ezer"]
+        millions = ["", "millió", "kettő millió", "három millió", "négy millió", "öt millió", "hat millió", "hét millió", "nyolc millió", "kilenc millió"]
+
+        def convert_chunk(n):
+            if n < 10:
+                return units[n]
+            elif n < 20:
+                return teens[n - 10]
+            elif n < 100:
+                ten, unit = divmod(n, 10)
+                return tens[ten] + (units[unit] if unit != 0 else "")
+            elif n < 1000:
+                hundred, rest = divmod(n, 100)
+                return hundreds[hundred] + (" " + convert_chunk(rest) if rest != 0 else "")
+            else:
+                return str(n)  # Ha túl nagy, visszaadjuk a számot
+
+        if number < 0:
+            return "mínusz " + self.number_to_hungarian(-number)
+        if number < 1000:
+            return convert_chunk(number)
+        elif number < 1000000:
+            thousand, rest = divmod(number, 1000)
+            return convert_chunk(thousand) + " ezer" + (" " + convert_chunk(rest) if rest != 0 else "")
+        elif number < 1000000000:
+            million, rest = divmod(number, 1000000)
+            return convert_chunk(million) + " millió" + (" " + self.number_to_hungarian(rest) if rest != 0 else "")
+        else:
+            return str(number)  # Ha túl nagy, visszaadjuk a számot
 
     def remove_extra_spaces(self, text):
         # Felesleges szóközök eltávolítása
@@ -268,6 +340,7 @@ class HungarianTextNormalizer:
         text = self.math_symbol(text)
         text = self.spoken_symbol(text)
         text = self.units_of_measurement(text)
+        text = self.number_to_words(text)
         text = self.remove_extra_spaces(text)
         # További normalizálási lépések szükség szerint
         return text
@@ -276,10 +349,8 @@ class HungarianTextNormalizer:
 if __name__ == "__main__":
     normalizer = HungarianTextNormalizer()
     sample_text = """
-    Az időpont 13h:15m:45s volt.
-
+    Az időpont 13h:15m volt.
     A hőmérséklet ma +25°C lesz, holnap pedig -5°C.
-    
     A tömeg 70kg, ami 0.07t-nak felel meg.
     A távolság 5km, amelyet 30min alatt tettünk meg.
     A terület 10ha, amely 100000m²-nek felel meg.
