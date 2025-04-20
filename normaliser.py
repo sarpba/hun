@@ -6,22 +6,66 @@ import os
 # Határozzuk meg a normaliser.py könyvtárát
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
+# Római számokat arab számmá alakító segédfüggvény
+def roman_to_int(s):
+    roman_map = {'I': 1, 'V': 5, 'X': 10, 'L': 50, 'C': 100, 'D': 500, 'M': 1000}
+    total = 0
+    prev = 0
+    for char in reversed(s):
+        val = roman_map[char]
+        if val < prev:
+            total -= val
+        else:
+            total += val
+        prev = val
+    return total
+
+def replace_roman_numerals(text):
+    """
+    Minden olyan tokent, ami csak római számból áll (I,V,X,L,C,D,M),
+    opcionálisan egy végponttal, arab számmá alakítjuk.
+    Pl. 'VI' -> '6', 'IX.' -> '9.'
+    """
+    pattern = re.compile(r'\b([MDCLXVI]+)(\.)?\b')
+    def repl(m):
+        roman, dot = m.group(1), m.group(2) or ''
+        # csak akkor alakítjuk, ha érvényes római számként értelmezhető
+        try:
+            arab = roman_to_int(roman)
+        except KeyError:
+            return m.group(0)
+        return f"{arab}{dot}"
+    return pattern.sub(repl, text)
+
 def load_force_changes(filename="force_changes.csv"):
-    # A fájl elérési útja a base_dir könyvtárhoz képest
+    """
+    A force_changes.csv most négy oszlopos:
+    key, value, spaces_before, spaces_after
+    """
     file_path = os.path.join(base_dir, filename)
     force_changes = {}
     with open(file_path, encoding='utf-8') as csvfile:
         reader = csv.reader(csvfile)
         for row in reader:
-            if row:
-                key, value = row
-                force_changes[key.strip()] = value.strip()
+            if not row:
+                continue
+            key, value, spaces_before, spaces_after = row
+            key = key.strip()
+            value = value.strip()
+            # számokra castelünk
+            before = int(spaces_before.strip())
+            after = int(spaces_after.strip())
+            force_changes[key] = (value, before, after)
     return force_changes
 
 def apply_force_changes(text, force_changes):
-    # Fix cserék alkalmazása a szövegre
-    for key, value in force_changes.items():
-        text = text.replace(key, f' {value} ')
+    """
+    A CSV-ben megadott szócsere után annyi szóközt teszünk
+    előre-utólag, amennyit a 3–4. oszlopban látunk.
+    """
+    for key, (value, before, after) in force_changes.items():
+        replacement = ' ' * before + value + ' ' * after
+        text = text.replace(key, replacement)
     return text
 
 def load_changes(filename="changes.csv"):
@@ -238,6 +282,7 @@ def normalize(text):
     force_changes = load_force_changes('force_changes.csv')
     changes = load_changes('changes.csv')
 
+    text = replace_roman_numerals(text)
     text = apply_force_changes(text, force_changes)
     text = apply_changes(text, changes)
     text = replace_dates(text)
@@ -252,6 +297,6 @@ def normalize(text):
 
 if __name__ == "__main__":
     # Példa szöveg
-    sample_text = "Ez egy példa, KENY, szöveg 10% és 7:15 időponttal 2015.10.23. dátummal. Chartmen"
+    sample_text = "Ez egy példa, KENY, szöveg 10% és 7:15 időponttal 2015.10.23. dátummal. Chartmen eszi a chipset. lyuk, wax. XIII. század."
     normalized_text = normalize(sample_text)
     print(normalized_text)
